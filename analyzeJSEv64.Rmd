@@ -1,0 +1,508 @@
+---
+title: "Working Memory Impairs Joint Simon Effect"
+subtitle: "Load JSE"
+author: "Do-Joon Yi"
+date: "6/11/2018"
+output: html_document
+mainfont: Noto Sans CJK KR
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 패키지
+`tidyr`, `dplyr`, `purrr`를 개별적으로 로드하면 함수들이 충돌하는 경우가 있다. `tidyverse`로 한번에 로드하는 것이 좋다. `lmerTest`는 `lme4`에서 p 값을 얻기 위해 필요한데, 없어도 문제는 없다.  
+```{r, results='hide', message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, afex, lme4, lmerTest, ggplot2, papaja, psych)
+```
+
+
+## 작업기억 과제
+작업기억 과제의 자료 파일을 업로드하고, Group 변인을 Low -> High 순으로 정리하였다.
+```{r}
+WW = read.csv('~/Dropbox/data/JSE/JSE_exp2/logJSEn64_WMtask.csv', header = TRUE)
+str(WW)
+WW$Group = factor(WW$Group, levels=1:2, labels=c("Low","High"))
+headTail(WW)
+```
+
+### 1. 작업기억 정확율
+#### 가. 기술통계
+먼저 개인별 자료를 정리한 다음, 전체 참가자의 수행을 집단별로 계산하였다.
+고부하 집단과 저부하집단의 정확율을 계산하였다. 
+```{r highlight=TRUE}
+wAcc1stLev <- WW %>% 
+  group_by(Group, SID) %>% # 집단 > 개인 순서로 구분한 후,
+  summarise(Accuracy = mean(Correct)) %>% # Correct의 평균을 Accuracy에 넣는다.
+  ungroup()
+wAcc1stLev
+
+wAcc2ndLev <- wAcc1stLev %>% 
+  group_by(Group) %>% # 집단으로 구분한 후,
+  summarise(Acc = mean(Accuracy), # Accuracy 평균을 Acc에 넣고,
+            CI = ci(Accuracy)) %>%  # papaja 패키지의 ci로 95% 집단간 신뢰구간 계산
+  ungroup()
+colnames(wAcc2ndLev)[2] <- "Accuracy"
+wAcc2ndLev
+```
+저부하 집단의 정확율은 `r round(wAcc2ndLev$Accuracy[1], digits=4)`이고, 고부하 집단의 정확율은 `r round(wAcc2ndLev$Accuracy[2], digits=4)`이었다. 집단간 차이를 t-test로 비교하였다.
+
+#### 나. Plotting
+아래는 ggplot2.
+```{r}
+ggplot(wAcc1stLev, aes(x=Group, y=Accuracy)) + 
+  geom_violin(trim = TRUE) +
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=.7, color='#636363', fill='#636363') +
+  geom_point(data = wAcc2ndLev, aes(y=Accuracy), color = "red", size=4) +
+  geom_errorbar(data = wAcc2ndLev, aes(ymin=Accuracy-CI, ymax=Accuracy+CI), 
+                color = "red", width=0.2) +
+  labs(x="Group", y="WM Accuracy") +
+  scale_x_discrete(labels=c("Low load", "High load")) +
+  coord_cartesian(ylim=c(.5, 1)) +
+  theme_bw(base_size = 14) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = .5))
+```
+
+아래는 papaja.
+```{r}
+apa_beeplot(data=wAcc1stLev, 
+            id="SID", dv="Accuracy", factors="Group", 
+            ylim = c(.5, 1),
+            las=1)
+```
+
+
+#### 다. T-test
+```{r}
+g1 <- wAcc1stLev %>% filter(Group=="Low") # low load 집단만 남김
+g2 <- wAcc1stLev %>% filter(Group=="High") # high load 집단만 남김
+t.test(g1$Accuracy, g2$Accuracy)
+```
+t-검증에서 집단차는 유의미한 경향성만을 보였다. 그러나 Student's t-test는 normality 가정을 만족해야 하는데, 작업기억 과제가 쉬웠기 때문에 참가자들의 점수 분포는 정규성과 거리가 멀다. 정규성을 검토한 Shapiro-Wilk 검사 결과는 다음과 같다.^[이 내용은 JASP에서 하는 것이 더 편리하다.] 
+```{r}
+shapiro.test(g1$Accuracy)
+shapiro.test(g2$Accuracy)
+```
+
+
+#### 라. 비모수통계: Mann-Whitney, Kruskal-Wallis 
+두 집단 자료 모두 정규성 가정을 만족하지 못하였으므로, Mann-Whitney u test를 실시하였다.^[https://goo.gl/1j4D1M]
+```{r}
+wilcox.test(Accuracy ~ Group, wAcc1stLev)
+```
+
+Kruskal-Wallis rank sum test 결과는 다음과 같다.
+```{r}
+kruskal.test(Accuracy ~ Group, wAcc1stLev)
+```
+
+#### 마. One-Way ANOVA
+참고로 'afex' 패키지의 'aov_4' 함수로 비교하였다. 당연히 결과는 Student's t-test와 같다. 개인자료를 평균하여 정리한 2nd-level 자료가 아닌 경우에 자동으로 *aggregating* 하여 분석한다.
+```{r}
+aov_4(Correct ~ Group + (1|SID), WW)
+```
+'aov_car' 함수를 사용해도 결과는 같다.
+```{r}
+aov_car(Correct ~ Group + Error(SID), WW)
+```
+
+#### 바. Linear Mixed Modeling
+정규성 가정이 필요없고, 무선효과를 설명할 수 있는 LME를 실시하였다.
+```{r}
+w2 <- glmer(Correct ~ as.factor(Group) + (1|SID), WW, family = binomial)
+summary(w2)
+```
+역시 집단차는 유의미한 경향성을 보였다.^[왜 z와 p값이 나왔지? 원래 lme4에서는 t-value가 나오고 p-value는 나오지 않는다. https://goo.gl/QcZZY7] 
+
+
+### 2. 작업기억 반응시간 분석
+#### 가. 기술통계
+먼저 개인별 자료를 정리한 다음, 전체 참가자의 수행을 집단별로 계산하였다.
+고부하 집단과 저부하집단의 정확율을 계산하였다. 
+```{r highlight=TRUE}
+cWW <- WW %>% filter(Correct==1) # 정반응만 선별
+# nrow(cWW)
+
+aWW <- cWW %>% filter(RT > .15) # anticipatory response 제거
+nrow(cWW) - nrow(aWW) # 제거된 반응 없었다.
+
+tWW <- aWW %>% # trimmed RT
+  group_by(Group, SID) %>% 
+  nest() %>% 
+  mutate(lbound = map(data, ~mean(.$RT)-3*sd(.$RT)), # lower/upper bound 계산
+         ubound = map(data, ~mean(.$RT)+3*sd(.$RT))) %>% 
+  unnest(lbound, ubound) %>% 
+  unnest(data) %>% 
+  mutate(Outlier = (RT < lbound)|(RT > ubound)) %>% 
+  select(Group, SID, Trial, RT, Outlier)
+sum(tWW$Outlier) # 3SD를 벗어난 반응도 없었다.
+
+# 1st-level
+wRT1stLev <- tWW %>% 
+  filter(Outlier==FALSE) %>% 
+  group_by(Group, SID) %>% # 집단 > 개인 순서로 구분한 후,
+  summarise(RT = mean(RT)) %>% # RT 평균을 RT 넣는다.
+  ungroup()
+wRT1stLev
+
+# 2nd-level
+wRT2ndLev <- wRT1stLev %>% 
+  group_by(Group) %>% 
+  summarise(gRT = mean(RT),
+            CI = ci(RT)) %>%
+  ungroup()
+colnames(wRT2ndLev)[2] <- "RT"
+wRT2ndLev
+```
+
+#### 나. Plotting
+아래는 ggplot2.
+```{r}
+ggplot(wRT1stLev, aes(x=Group, y=RT)) + 
+  geom_violin(trim = TRUE) +
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=.7, color='#636363', fill='#636363') +
+  geom_point(data = wRT2ndLev, aes(y=RT), color = "red", size=4) +
+  geom_errorbar(data = wRT2ndLev, aes(ymin=RT-CI, ymax=RT+CI), 
+                color = "red", width=0.2) +
+  labs(x="Group", y="WM RT") +
+  scale_x_discrete(labels=c("Low load", "High load")) +
+  coord_cartesian(ylim=c(.5, 2)) +
+  theme_bw(base_size = 14) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = .5))
+```
+
+아래는 papaja.
+```{r}
+apa_beeplot(data=wRT1stLev, 
+            id="SID", dv="RT", factors="Group", 
+            ylim = c(.5, 2),
+            las=1)
+```
+
+#### 다. T-test
+```{r}
+g1 <- wRT1stLev %>% filter(Group=="Low") # low load 집단만 남김
+g2 <- wRT1stLev %>% filter(Group=="High") # high load 집단만 남김
+t.test(g1$RT, g2$RT)
+
+shapiro.test(g1$RT)
+shapiro.test(g2$RT)
+```
+
+
+## Go/Nogo 과제
+Go/Nogo 과제의 자료 파일을 업로드하고, 숫자들을 범주로 바꾸었다.
+```{r}
+TT = read.csv('~/Dropbox/data/JSE/JSE_exp2/logJSEn64_GNGtask.csv', header = TRUE)
+str(TT)
+
+TT$Group = factor(TT$Group, levels=1:2, labels=c("Low","High"))
+TT$Load = factor(TT$Load, levels=1:2, labels=c("Absent","Present"))
+TT$Congruent = factor(TT$Congruent, levels=0:2, labels=c("notme","congruent","incongruent"))
+TT$Target = factor(TT$Target, levels=0:1, labels=c("not","target"))
+
+headTail(TT) # psych 패키지
+```
+
+### 1. Go/Nogo 과제 반응시간
+####가. 기술통계
+각 참가자가 두 명씩 짝을 이루어 실험을 수행했고 절반의 시행에서만 자신의 표적이 출현하였다. 따라서 자신의 표적에 대해서 올바르게 반응한 시행만을 추출하였다. 그 다음, 150ms 보다 빠른 반응을 제거하고 3SD 기준을 적용하여 가외치도 제거하였다. 
+```{r}
+cTT <- TT %>% 
+  filter(Congruent!="notme", Correct==1) %>% # 표적시행과 정반응만 선별
+  droplevels %>% # "notme" level 제거
+  mutate(RT = RT*1000) # ms 단위로 변환
+unique(cTT$Congruent)
+
+
+aTT <- cTT %>% filter(RT > 150) # anticipatory response 제거
+nrow(cTT) - nrow(aTT) # 4 시행 제거됨
+100*(nrow(cTT) - nrow(aTT))/nrow(aTT) # 0.03% 제거된 셈이다.
+
+
+tTT <- aTT %>% # trimmed RT
+  group_by(Group, Load, Congruent, SID) %>% 
+  nest() %>% 
+  mutate(lbound = map(data, ~mean(.$RT)-3*sd(.$RT)), # lower/upper bound 계산
+         ubound = map(data, ~mean(.$RT)+3*sd(.$RT))) %>% 
+  unnest(lbound, ubound) %>% 
+  unnest(data) %>% 
+  mutate(Outlier = (RT < lbound)|(RT > ubound)) %>% 
+  select(Group, Load, Congruent, SID, Epoch, Trial, RT, Outlier)
+sum(tTT$Outlier) # 3SD를 벗어난 반응도 없었다.
+100*sum(tTT$Outlier)/nrow(aTT) # 1.13% 제거되었다.
+
+sTT <- tTT %>% filter(!Outlier) # 가외치 제외한 최종 반응시간 자료
+```
+
+
+유효시행들을 집단 > 부하 > 일치 > 개인 순서로 구분하여 1st-level summmary를 만들고, 일치효과를 계산하였다. 마지막으로 전체 참가자의 평균인 2nd-level summary를 만들었다. 
+```{r}
+# 1st-level
+gRT1stLev <- tTT %>% 
+  filter(Outlier==FALSE) %>% 
+  group_by(Group, Load, Congruent, SID) %>% # 집단 > 부하 > 일치 > 개인 순서로 구분,
+  summarise(RT = mean(RT)) %>% 
+  ungroup()
+gRT1stLev
+
+gRT1stLev2 <- gRT1stLev %>% # 일치효과 계산
+  spread(Congruent, RT) %>% 
+  mutate(Congruency = incongruent - congruent) %>% 
+  select(Group, Load, SID, Congruency) 
+gRT1stLev2
+
+# 2nd-level
+gRT2ndLev <- gRT1stLev %>% 
+  group_by(Group, Load, Congruent) %>% 
+  summarise(gRT = mean(RT),
+            CI = ci(RT)) %>%
+  ungroup()
+colnames(gRT2ndLev)[4] <- "RT"
+gRT2ndLev
+```
+
+#### 나. Plotting
+`papaja` 패키지를 사용하였다. 
+```{r}
+apa_barplot(data=gRT1stLev, 
+            id="SID", dv="RT", factors=c("Load","Congruent","Group"), 
+            dispersion = wsci,
+            ylim = c(300, 400),
+            las=1)
+```
+
+개인차가 너무 커서 조건간 차이가 잘 보이지 않는다. *Congruency* 효과를 계산하여 다시 그렸다.
+```{r}
+apa_beeplot(data=gRT1stLev2, 
+            id="SID", dv="Congruency", factors=c("Group","Load"), 
+            dispersion = wsci,
+            intercept = 0,
+            # args_swarm = list(col="darkgray"),
+            # args_points = list(col="red"),
+            # args_error_bars = list(col="red"),
+            args_legend = list(x="topright"),
+            las=1)
+```
+
+#### 다. ANOVA & Post-hoc
+`afex` 패키지의 aov_ez의 코드가 가장 해석하기 편하다.^[https://goo.gl/gUprtS] 
+```{r}
+m1 <- aov_ez("SID", "RT", sTT, 
+                between = "Group", 
+                within = c("Load","Congruent"))
+# m1 <- aov_4(RT ~ Load*Congruent*Group + (Load*Congruent|SID), sTT) # 결과는 같음.
+# m1 <- aov_car(RT ~ Load*Congruent*Group + Error(SID/(Load*Congruent)), sTT) # 결과는 같음.
+
+knitr::kable(nice(m1))
+```
+
+*Group:Congruent* 이원 상호작용이 있었고 *Group:Load:Congruent* 삼원 상호작용은 유의하지 않았다. 
+
+이제 `emmeans` 패키지를 사용하여 *Group:Load* 조건별 *Congruent* 효과를 비교하였다. 
+
+```{r}
+em_m1 <- emmeans(m1, ~Congruent:Load:Group)
+my.posthoc <- list(
+  lo.abs  = c(-1, 1, 0, 0, 0, 0, 0, 0),
+  lo.pre  = c(0, 0, -1, 1, 0, 0, 0, 0),
+  hi.abs  = c(0, 0, 0, 0, -1, 1, 0, 0),
+  hi.pre  = c(0, 0, 0, 0, 0, 0, -1, 1)
+)
+contrast(em_m1, my.posthoc, adjust = "mvt") # ?summary.emmGrid
+# contrast(em_m1, mycontrast, adjust = "none") 
+# contrast(em_m1, mycontrast, adjust = "bonferroni") 
+# contrast(em_m1, mycontrast, adjust = "tukey") # -> sidak으로 바뀜: 참가자내 -> 참가자간 변인 취급하는 듯
+```
+
+작업기억 부하 유무에 상관없이 일치효과가 low load 집단에서는 나타났고, high load 집단에서는 보이지 않았다. 위 분석은 다중비교 보정을 위해 `mvt` method를 사용하였다. Lenth의 설명은 아래와 같다.^[https://goo.gl/5qzgeC, Planned comparison이라면 'none'을 사용하면 될 것 같다.] 
+
+> An adjustment method that is usually appropriate is Bonferroni; however, it can be quite conservative. Using adjust = "mvt" is the closest to being the “exact” all-around method “single-step” method, as it uses the multivariate t distribution (and the mvtnorm package) with the same covariance structure as the estimates to determine the adjustment. However, this comes at high computational expense as the computations are done using simulation techniques. For a large set of tests (and especially confidence intervals), the computational lag becomes noticeable if not intolerable.
+
+`emmeans` 패키지에서는 추정치를 그림으로 그려주는 함수를 제공한다. 
+```{r}
+emmip(m1, Congruent ~ Load|Group, CIs = TRUE) +
+  ggplot2::theme_light()
+```
+
+
+### 2. Go/Nogo 과제 정확율
+####가. 기술통계
+먼저 참가자 자신의 표적이 출현한 시행들만 분석하여 그림을 그렸다.
+
+```{r}
+mTT <- TT %>% 
+  filter(Congruent!="notme") %>% # 표적시행만 선별
+  droplevels %>%  # "notme" level 제거
+  select(Group, Load, Congruent, SID, Epoch, Trial, Correct)
+headTail(mTT)
+
+gAcc1stLev2 <- TT %>% 
+  filter(Congruent!="notme") %>% 
+  droplevels %>% 
+  group_by(Group, Load, Congruent, SID) %>% 
+  summarise(Accuracy = mean(Correct)) %>%
+  ungroup()
+gAcc1stLev2
+unique(gAcc1stLev2$Congruent)
+
+gAcc2ndLev2 <- gAcc1stLev2 %>% 
+  group_by(Group, Load, Congruent) %>% 
+  summarise(Acc = mean(Accuracy),
+            CI = ci(Accuracy)) %>%
+  ungroup()
+colnames(gAcc2ndLev2)[4] <- "Accuracy"
+gAcc2ndLev2
+```
+
+####나. Plotting
+```{r}
+apa_barplot(data=gAcc1stLev2, 
+            id="SID", dv="Accuracy", factors=c("Load","Congruent","Group"), 
+            dispersion = wsci,
+            ylim = c(0.9, 1),
+            args_legend = list(x="topright"),
+            las=1)
+```
+
+Go/Nogo 과제의 정확율이 매우 높은 편이지만 조건간 차이가 보인다. 특히, high load 집단에서 작업기억 부하가 없을 때 일치효과가 두드러진다. 
+
+####다. ANOVA & Post-hoc
+```{r}
+m2 <- aov_ez("SID", "Correct", mTT, 
+             between = "Group", 
+             within = c("Load","Congruent"))
+knitr::kable(nice(m2))
+```
+
+*Group:Load:Congruent*의 삼원상호작용이 나타났다. 집단별 작업기억 부하의 효과가 달랐기 때문이다. 
+
+```{r}
+em_m2 <- emmeans(m2, ~Congruent:Load:Group)
+my.posthoc <- list(
+  lo.abs  = c(-1, 1, 0, 0, 0, 0, 0, 0),
+  lo.pre  = c(0, 0, -1, 1, 0, 0, 0, 0),
+  hi.abs  = c(0, 0, 0, 0, -1, 1, 0, 0),
+  hi.pre  = c(0, 0, 0, 0, 0, 0, -1, 1)
+)
+contrast(em_m2, my.posthoc, adjust = "mvt") # ?summary.emmGrid
+```
+
+반응시간 결과와 달리, High load 집단은 작업기억을 사용하지 않을 때 일치효과를 보이고 있다. 다중비교 보정을 하지 않으면 결과가 다음과 같다. 
+
+```{r}
+em_m2 <- emmeans(m2, ~Congruent:Load:Group)
+my.posthoc <- list(
+  lo.abs  = c(-1, 1, 0, 0, 0, 0, 0, 0),
+  lo.pre  = c(0, 0, -1, 1, 0, 0, 0, 0),
+  hi.abs  = c(0, 0, 0, 0, -1, 1, 0, 0),
+  hi.pre  = c(0, 0, 0, 0, 0, 0, -1, 1)
+)
+contrast(em_m2, my.posthoc, adjust = "none") # ?summary.emmGrid
+```
+
+
+####라. 비표적 시행 반응
+자신의 표적이 아닐 때 실수로 반응했을 가능성을 비교하였다. 
+
+```{r}
+gAcc1stLev2 <- TT %>% 
+  filter(Congruent=="notme") %>% 
+  droplevels %>% 
+  group_by(Group, Load, SID) %>%
+  summarise(Accuracy = mean(Correct)) %>%
+  select(Group, Load, SID, Accuracy)
+gAcc1stLev2
+
+gAcc2ndLev2 <- gAcc1stLev2 %>% 
+  group_by(Group, Load) %>% 
+  summarise(Acc = mean(Accuracy),
+            CI = ci(Accuracy)) %>%
+  ungroup()
+colnames(gAcc2ndLev2)[2] <- "Accuracy"
+gAcc2ndLev2
+
+apa_barplot(data=gAcc1stLev2, 
+            id="SID", dv="Accuracy", factors=c("Group","Load"), 
+            dispersion = wsci,
+            ylim = c(0.95, 1),
+            args_legend = list(x="topright"),
+            las=1)
+
+apa_beeplot(data=gAcc1stLev2, 
+            id="SID", dv="Accuracy", factors=c("Group","Load"), 
+            dispersion = wsci,
+            intercept = 0,
+            ylim = c(0.95, 1),
+            args_legend = list(x="topright"),
+            las=1)
+
+m3 <- aov_ez("SID", "Accuracy", gAcc1stLev2, 
+             between = "Group", 
+             within = "Load")
+knitr::kable(nice(m3))
+```
+
+### 3. Go/Nogo 과제 반응시간
+High load 집단은 작업기억 부하가 없을 때에도 일치효과를 보이지 않았다. 이는 작업기억 부하의 효과가 확산되기 때문이라고 생각할 수 있다. 그렇다면 확산 효과는 시간이 지날 수록 강해질까? 아니면 실험 시작부터 존재할까? 이를 분석하기 위해, 실험을 *absent* 블럭부터 시작한 참가자들의 자료를 분석하였다. 
+
+```{r}
+eTT <- aTT %>% # trimmed RT
+  filter(Block1==1) %>% # 작업기억 없는 epoch 먼저 한 참가자
+  group_by(Group, Load, Congruent, Epoch, SID) %>% 
+  nest() %>% 
+  mutate(lbound = map(data, ~mean(.$RT)-3*sd(.$RT)), # lower/upper bound 계산
+         ubound = map(data, ~mean(.$RT)+3*sd(.$RT))) %>% 
+  unnest(lbound, ubound) %>% 
+  unnest(data) %>% 
+  mutate(Outlier = (RT < lbound)|(RT > ubound)) %>% 
+  select(Group, Load, Congruent, SID, Epoch, Trial, RT, Outlier)
+sum(eTT$Outlier)
+100*sum(eTT$Outlier)/nrow(aTT) # 0.25% 제거되었다.
+
+pTT <- eTT %>% filter(!Outlier) # 가외치 제외한 최종 반응시간 자료
+
+# 1st-level
+gRT1stLev3 <- pTT %>% 
+  group_by(Group, Load, Congruent, Epoch, SID) %>%
+  summarise(RT = mean(RT)) %>% 
+  ungroup()
+gRT1stLev3
+
+gRT1stLev4 <- gRT1stLev3 %>% # 일치효과 계산
+  spread(Congruent, RT) %>% 
+  mutate(Congruency = incongruent - congruent) %>% 
+  select(Group, Load, Epoch, SID, Congruency) 
+gRT1stLev4
+
+apa_lineplot(data=gRT1stLev4, 
+            id="SID", dv="Congruency", factors=c("Epoch","Load","Group"), 
+            intercept = 0,
+            dispersion = wsci,
+            ylim = c(-20, 50),
+            args_legend = list(x="topright"),
+            las=1)
+
+```
+
+이 결과에 따르면, high load 집단에서 반응시간에 미치는 작업기억 부하의 효과는 실험 초기부터 시작되었다. 실험전에 고부하 작업기억을 연습할 때부터 시작되었다고 봐야 할 것이다. 
+
+일치효과가 반응시간보다 정확율에서 나타났다고 설명하는 것이 낫겠다.
+
+
+
+
+
+
+
+
+
+
+
+
+
