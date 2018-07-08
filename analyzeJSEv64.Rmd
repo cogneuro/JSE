@@ -21,7 +21,7 @@ pacman::p_load(tidyverse, afex, lme4, lmerTest, ggplot2, papaja, psych)
 ## 작업기억 과제
 작업기억 과제의 자료 파일을 업로드하고, Group 변인을 Low -> High 순으로 정리하였다.
 ```{r}
-WW = read.csv('~/Dropbox/data/JSE/JSE_exp2/logJSEn64_WMtask.csv', header = TRUE)
+WW = read.csv('~/Documents/GitHub/JSE/logJSEn64_WMtask.csv', header = TRUE)
 str(WW)
 WW$Group = factor(WW$Group, levels=1:2, labels=c("Low","High"))
 headTail(WW)
@@ -198,7 +198,7 @@ shapiro.test(g2$RT)
 ## Go/Nogo 과제
 Go/Nogo 과제의 자료 파일을 업로드하고, 숫자들을 범주로 바꾸었다.
 ```{r}
-TT = read.csv('~/Dropbox/data/JSE/JSE_exp2/logJSEn64_GNGtask.csv', header = TRUE)
+TT = read.csv('~/Documents/GitHub/JSE/logJSEn64_GNGtask.csv', header = TRUE)
 str(TT)
 
 TT$Group = factor(TT$Group, levels=1:2, labels=c("Low","High"))
