@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## 패키지
-`tidyr`, `dplyr`, `purrr`를 개별적으로 로드하면 함수들이 충돌하는 경우가 있다. `tidyverse`로 한번에 로드하는 것이 좋다. `lmerTest`는 `lme4`에서 p 값을 얻기 위해 필요한데, 없어도 문제는 없다.  
+`tidyr`, `dplyr`, `purrr`를 개별적으로 로드하면 함수들이 충돌하는 경우가 있다. `tidyverse`로 한번에 로드하는 것이 좋다. `lmerTest`는 `lme4`에서 *p* 값을 얻기 위해 필요한데, 없어도 문제는 없다.  
 ```{r, results='hide', message=FALSE, warning=FALSE}
 pacman::p_load(tidyverse, afex, lme4, lmerTest, ggplot2, papaja, psych)
 ```
