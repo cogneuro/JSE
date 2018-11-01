@@ -23,7 +23,7 @@ pacman::p_load(tidyverse, afex, lme4, lmerTest, ggplot2, papaja, psych)
 ```{r}
 WW = read.csv('~/Documents/GitHub/JSE/logJSEn64_WMtask.csv', header = TRUE)
 str(WW)
-WW$Group = factor(WW$Group, levels=1:2, labels=c("Low","High"))
+WW$Group = factor(WW$Group, levels=c("Low","High"))
 headTail(WW)
 ```
 
