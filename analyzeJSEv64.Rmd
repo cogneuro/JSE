@@ -2,7 +2,7 @@
 title: "Working Memory Impairs Joint Simon Effect"
 subtitle: "Load JSE"
 author: "Do-Joon Yi"
-date: "6/11/2018"
+date: "`r Sys.Date()`"
 output: html_document
 mainfont: Noto Sans CJK KR
 ---
@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ## 패키지
 `tidyr`, `dplyr`, `purrr`를 개별적으로 로드하면 함수들이 충돌하는 경우가 있다. `tidyverse`로 한번에 로드하는 것이 좋다. `lmerTest`는 `lme4`에서 *p* 값을 얻기 위해 필요한데, 없어도 문제는 없다.  
 ```{r, results='hide', message=FALSE, warning=FALSE}
-pacman::p_load(tidyverse, afex, lme4, lmerTest, ggplot2, papaja, psych)
+pacman::p_load(tidyverse, afex, lme4, lmerTest, ggplot2, papaja, psych, emmeans)
 ```
 
 
@@ -66,9 +66,11 @@ ggplot(wAcc1stLev, aes(x=Group, y=Accuracy)) +
         plot.title = element_text(hjust = .5))
 ```
 
-아래는 papaja.
+아래는 papaja. (2018년 10월 현재, papaja plot은 tibble에서 작동하지 않고, id는 factor이어야만 한다.)
 ```{r}
-apa_beeplot(data=wAcc1stLev, 
+temp <- as.data.frame(wAcc1stLev)
+temp$SID <- as.factor(temp$SID)
+apa_beeplot(data=temp, 
             id="SID", dv="Accuracy", factors="Group", 
             ylim = c(.5, 1),
             las=1)
@@ -178,7 +180,9 @@ ggplot(wRT1stLev, aes(x=Group, y=RT)) +
 
 아래는 papaja.
 ```{r}
-apa_beeplot(data=wRT1stLev, 
+temp <- as.data.frame(wRT1stLev)
+temp$SID <- as.factor(temp$SID)
+apa_beeplot(data=temp, 
             id="SID", dv="RT", factors="Group", 
             ylim = c(.5, 2),
             las=1)
@@ -201,7 +205,7 @@ Go/Nogo 과제의 자료 파일을 업로드하고, 숫자들을 범주로 바�
 TT = read.csv('~/Documents/GitHub/JSE/logJSEn64_GNGtask.csv', header = TRUE)
 str(TT)
 
-TT$Group = factor(TT$Group, levels=1:2, labels=c("Low","High"))
+TT$Group = factor(TT$Group, levels=c("Low","High"))
 TT$Load = factor(TT$Load, levels=1:2, labels=c("Absent","Present"))
 TT$Congruent = factor(TT$Congruent, levels=0:2, labels=c("notme","congruent","incongruent"))
 TT$Target = factor(TT$Target, levels=0:1, labels=c("not","target"))
@@ -270,7 +274,9 @@ gRT2ndLev
 #### 나. Plotting
 `papaja` 패키지를 사용하였다. 
 ```{r}
-apa_barplot(data=gRT1stLev, 
+temp <- as.data.frame(gRT1stLev)
+temp$SID <- as.factor(temp$SID)
+apa_barplot(data=temp, 
             id="SID", dv="RT", factors=c("Load","Congruent","Group"), 
             dispersion = wsci,
             ylim = c(300, 400),
@@ -279,7 +285,9 @@ apa_barplot(data=gRT1stLev,
 
 개인차가 너무 커서 조건간 차이가 잘 보이지 않는다. *Congruency* 효과를 계산하여 다시 그렸다.
 ```{r}
-apa_beeplot(data=gRT1stLev2, 
+temp <- as.data.frame(gRT1stLev2)
+temp$SID <- as.factor(temp$SID)
+apa_beeplot(data=temp, 
             id="SID", dv="Congruency", factors=c("Group","Load"), 
             dispersion = wsci,
             intercept = 0,
@@ -362,7 +370,9 @@ gAcc2ndLev2
 
 ####나. Plotting
 ```{r}
-apa_barplot(data=gAcc1stLev2, 
+temp <- as.data.frame(gAcc1stLev2)
+temp$SID <- as.factor(temp$SID)
+apa_barplot(data=temp, 
             id="SID", dv="Accuracy", factors=c("Load","Congruent","Group"), 
             dispersion = wsci,
             ylim = c(0.9, 1),
@@ -427,14 +437,18 @@ gAcc2ndLev2 <- gAcc1stLev2 %>%
 colnames(gAcc2ndLev2)[2] <- "Accuracy"
 gAcc2ndLev2
 
-apa_barplot(data=gAcc1stLev2, 
+temp <- as.data.frame(gAcc1stLev2)
+temp$SID <- as.factor(temp$SID)
+apa_barplot(data=temp, 
             id="SID", dv="Accuracy", factors=c("Group","Load"), 
             dispersion = wsci,
             ylim = c(0.95, 1),
             args_legend = list(x="topright"),
             las=1)
 
-apa_beeplot(data=gAcc1stLev2, 
+temp <- as.data.frame(gAcc1stLev2)
+temp$SID <- as.factor(temp$SID)
+apa_beeplot(data=temp, 
             id="SID", dv="Accuracy", factors=c("Group","Load"), 
             dispersion = wsci,
             intercept = 0,
@@ -480,7 +494,9 @@ gRT1stLev4 <- gRT1stLev3 %>% # 일치효과 계산
   select(Group, Load, Epoch, SID, Congruency) 
 gRT1stLev4
 
-apa_lineplot(data=gRT1stLev4, 
+temp <- as.data.frame(gRT1stLev4)
+temp$SID <- as.factor(temp$SID)
+apa_lineplot(data=temp, 
             id="SID", dv="Congruency", factors=c("Epoch","Load","Group"), 
             intercept = 0,
             dispersion = wsci,
