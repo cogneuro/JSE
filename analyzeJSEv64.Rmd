@@ -238,7 +238,7 @@ tTT <- aTT %>% # trimmed RT
   unnest(data) %>% 
   mutate(Outlier = (RT < lbound)|(RT > ubound)) %>% 
   select(Group, Load, Congruent, SID, Epoch, Trial, RT, Outlier)
-sum(tTT$Outlier) # 3SD를 벗어난 반응도 없었다.
+sum(tTT$Outlier) # 169시행이 가외치
 100*sum(tTT$Outlier)/nrow(aTT) # 1.13% 제거되었다.
 
 sTT <- tTT %>% filter(!Outlier) # 가외치 제외한 최종 반응시간 자료
